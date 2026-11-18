@@ -1,0 +1,69 @@
+diff --git a/arch/arm64/boot/dts/qcom/msm8998-xiaomi-sagit.dts b/arch/arm64/boot/dts/qcom/msm8998-xiaomi-sagit.dts
+--- a/arch/arm64/boot/dts/qcom/msm8998-xiaomi-sagit.dts
++++ b/arch/arm64/boot/dts/qcom/msm8998-xiaomi-sagit.dts
+@@ -23,6 +23,13 @@
+ 	qcom,board-id = <30 0>;
+ 	/* Required for bootloader to select correct board */
+ 	qcom,msm-id = <292 0x20001>; /* 8998 v2.1 */
++
++	battery: battery {
++		compatible = "simple-battery";
++		voltage-min-design-microvolt = <3700000>;
++		voltage-max-design-microvolt = <4400000>;
++		charge-full-design-microamp-hours = <3350000>;
++	};
+ 
+ 	chosen {
+ 		#address-cells = <2>;
+@@ -265,6 +272,15 @@
+ 		function = "func2";
+ 		power-source = <0>;
+ 	};
++};
++
++&pmi8998_charger {
++	status = "okay";
++	monitored-battery = <&battery>;
++};
++
++&pmi8998_rradc {
++	status = "okay";
+ };
+ 
+ &pmi8998_fg {
+diff --git a/drivers/power/supply/qcom_fg.c b/drivers/power/supply/qcom_fg.c
+--- a/drivers/power/supply/qcom_fg.c
++++ b/drivers/power/supply/qcom_fg.c
+@@ -1094,7 +1094,7 @@
+ 
+ 		rc = devm_request_threaded_irq(chip->dev, irq, NULL,
+ 						qcom_fg_handle_usb_plugin,
+-						IRQF_ONESHOT, "usb-plugin", chip);
++						IRQF_ONESHOT | IRQF_SHARED, "usb-plugin", chip);
+ 		if (rc < 0) {
+ 			pr_err("Couldn't request irq %d\n", irq);
+ 			return rc;
+diff --git a/drivers/power/supply/qcom_pmi8998_charger.c b/drivers/power/supply/qcom_pmi8998_charger.c
+--- a/drivers/power/supply/qcom_pmi8998_charger.c
++++ b/drivers/power/supply/qcom_pmi8998_charger.c
+@@ -922,6 +922,11 @@
+ 			 irqreturn_t (*handler)(int irq, void *data))
+ {
+ 	int rc;
++	unsigned long flags = IRQF_ONESHOT;
++
++	/* The fuel gauge also observes USB cable changes. */
++	if (!strcmp(name, "usb-plugin"))
++		flags |= IRQF_SHARED;
+ 
+ 	*irq = of_irq_get_byname(chip->dev->of_node, name);
+ 	if (*irq < 0)
+@@ -929,7 +934,7 @@
+ 				     "Couldn't get irq %s byname\n", name);
+ 
+ 	rc = devm_request_threaded_irq(chip->dev, *irq, NULL, handler,
+-				       IRQF_ONESHOT, name, chip);
++				       flags, name, chip);
+ 	if (rc < 0)
+ 		return dev_err_probe(chip->dev, rc, "Couldn't request irq %s\n",
+ 				     name);

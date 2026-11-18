@@ -1,0 +1,38 @@
+maintainer=""
+pkgname=pd-mapper
+pkgver=0_git20251230
+pkgrel=0
+pkgdesc="Qualcomm protection-domain service mapper for legacy kernels"
+url="https://github.com/linux-msm/pd-mapper"
+arch="aarch64"
+license="BSD-3-Clause"
+makedepends="qrtr-dev xz-dev"
+subpackages="$pkgname-openrc"
+# Upstream has no test suite.
+options="!check"
+_commit="5ecd2fe926aca7abfe40724177f63b942cff3947"
+source="
+	$pkgname-$_commit.tar.gz::https://github.com/linux-msm/pd-mapper/archive/$_commit.tar.gz
+	pd-mapper.initd
+	"
+builddir="$srcdir/$pkgname-$_commit"
+
+build() {
+	make
+}
+
+package() {
+	install -Dm755 pd-mapper "$pkgdir"/usr/sbin/pd-mapper
+	install -Dm755 "$srcdir"/pd-mapper.initd "$pkgdir"/etc/init.d/pd-mapper
+	install -Dm644 LICENSE "$pkgdir"/usr/share/licenses/$pkgname/LICENSE
+}
+
+openrc() {
+	install="$subpkgname.post-install"
+	default_openrc
+}
+
+sha512sums="
+d8dda67fac505141fc021e66c563672e76dc8202358a2b493db8c4a6034dac27db1a0dcda04406ef001bb62cfcafe7c8f8343a3846c935525407d53551c9f6c4  pd-mapper-5ecd2fe926aca7abfe40724177f63b942cff3947.tar.gz
+59421e32a4f93bd82116e97f9aea0bef887d7efe52af3714a1d34ac8aaa7e60a2e6b7e0226c5332da7170b110cb65559140abd2def78eab5f7d0e5c70e20009a  pd-mapper.initd
+"

@@ -1,0 +1,80 @@
+# Archived: unmaintained
+# Stable Linux kernel with patches for MSM8998 devices
+# Kernel config based on: msm8998_defconfig
+maintainer=""
+_flavor="postmarketos-qcom-msm8998"
+pkgname=linux-$_flavor
+pkgver=6.0
+pkgrel=14
+_commit="90169e6e9fee29fae14aeac0a905246be5ce6304"
+pkgdesc="Mainline Kernel fork for MSM8998 devices"
+arch="aarch64"
+_carch="arm64"
+_config="config-$_flavor.$arch"
+url="https://gitlab.com/msm8998-mainline/linux"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps
+	pmb:cross-native
+"
+makedepends="
+	bash
+	bison
+	findutils
+	flex
+	linux-headers
+	openssl-dev
+	perl
+	postmarketos-installkernel
+	xz
+"
+
+# Source
+source="
+	https://gitlab.com/msm8998-mainline/linux/-/archive/$_commit/linux-$_commit.tar.gz
+	$_config
+	mi6-firmware-carveouts.patch
+	mi6-fuel-gauge-resources.patch
+	mi6-fuel-gauge-signed-current.patch
+	mi6-charger-enable.patch
+	mi6-wcn3990-key-removal.patch
+	mi6-wcn3990-disassoc-txbf.patch
+"
+builddir="$srcdir/linux-$_commit"
+
+prepare() {
+	default_prepare
+	cp "$srcdir/config-$_flavor.$arch" .config
+}
+
+build() {
+	unset LDFLAGS
+	# V=1: workaround for pma#1990, remove after upgrading to >= 6.2
+	make ARCH="$_carch" CC="${CC:-gcc}" \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1))-$_flavor" V=1
+}
+
+package() {
+	mkdir -p "$pkgdir"/boot
+
+	make zinstall modules_install dtbs_install \
+		ARCH="$_carch" \
+		INSTALL_PATH="$pkgdir"/boot \
+		INSTALL_MOD_PATH="$pkgdir" \
+		INSTALL_MOD_STRIP=1 \
+		INSTALL_DTBS_PATH="$pkgdir"/boot/dtbs
+	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
+
+	install -D "$builddir"/include/config/kernel.release \
+		"$pkgdir"/usr/share/kernel/$_flavor/kernel.release
+}
+
+sha512sums="
+e1d75369d58f823da5fe0cde17314a4ec2dc9dbab57452b7b8af6b97e91797720162e78f9ca7da2cbb533833b38be86743b8bf0084af1b36b5d23c9207a5248e  linux-90169e6e9fee29fae14aeac0a905246be5ce6304.tar.gz
+a6ecd8064a6e37d609f596d00eed64846dc27a6514c1cc2f87ed60b163e88c8f474a3290a5d1facf56b98fce22d769d981c68578fc7285869dab73af1677b2db  config-postmarketos-qcom-msm8998.aarch64
+23b10e29b60bcb2cabc1da39f064bed5f513f48061e83fa9237de374ebd2027fb30f0d2cb7ef2ba780d5c2d0b0b9c058e4b82f89d588f51c71e167f6293b81c1  mi6-firmware-carveouts.patch
+727bc3379026b502e1739171f558200b00dd8036bf856fd01c4cfcb9dad2b008e60d8c714977f54ce8be81a78919c2e16baf6b8654aa1b6e36f65907f0f2dd2e  mi6-fuel-gauge-resources.patch
+c4b2d757053c13a388fcb9a0ddeda369eaa334f03ad1d7e9869b9aefb2030f17c122c5ad21503237b47ecfd150894a0db272ec4a3a92ae56bfeca93be6f691c7  mi6-fuel-gauge-signed-current.patch
+55834145e50c572010ed16b40a088efe5084b5b53ef0ea42ab8e00a51e64c311698fd9e64a3e36f370c42f311383aaf2f776ac48c1035e310d26c9bd0de854d9  mi6-charger-enable.patch
+dc9bd5645439d5cb30cf9fce8d471348ed4e54f734df46d579bc78f0a1c00dee5fcee81af87cf5a12a36bd01bcc6310670b52495bfc8a675a5f4b5cdcde35dec  mi6-wcn3990-key-removal.patch
+647b0dc05139d92ffa0a3389a882e471112be23ff8321df76d7c95cd7be3493fb6baff31b0ecd122210adf3a5ed79af4291e5dc84d5a8a851a093b4c3bad61a2  mi6-wcn3990-disassoc-txbf.patch
+"

@@ -1,0 +1,11 @@
+#!/sbin/openrc-run
+description="Qualcomm protection-domain service mapper"
+supervisor=supervise-daemon
+command="/usr/sbin/pd-mapper"
+
+depend() {
+	need localmount
+	use qrtr-ns
+	after modules
+	before networkmanager
+}

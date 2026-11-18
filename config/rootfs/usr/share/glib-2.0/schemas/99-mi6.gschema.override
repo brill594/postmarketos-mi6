@@ -1,0 +1,5 @@
+[mobi.phosh.osk]
+ignore-activation=['org.gnome.Calculator', 'org.gnome.Settings']
+
+[org.gnome.desktop.interface]
+show-battery-percentage=true

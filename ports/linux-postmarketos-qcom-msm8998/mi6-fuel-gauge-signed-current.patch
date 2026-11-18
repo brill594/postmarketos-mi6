@@ -1,0 +1,27 @@
+diff --git a/drivers/power/supply/qcom_fg.c b/drivers/power/supply/qcom_fg.c
+--- a/drivers/power/supply/qcom_fg.c
++++ b/drivers/power/supply/qcom_fg.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ /* Copyright (c) 2020, The Linux Foundation. All rights reserved. */
+ 
++#include <linux/bitops.h>
+ #include <linux/kernel.h>
+ #include <linux/platform_device.h>
+ #include <linux/of_device.h>
+@@ -694,9 +695,11 @@ static int qcom_fg_gen3_get_current(struct qcom_fg_chip *chip, int *val)
+ 		pr_err("Failed to read current\n");
+ 		return rc;
+ 	}
+-	//handle rev 1 too
+-	temp = readval[1] << 8 | readval[0];
+-	temp = twos_compliment_extend(temp, 15);
++	/*
++	 * The PMIC reports charging as negative; power_supply expects positive.
++	 * Sign-extend the 16-bit sample before scaling and reversing direction.
++	 */
++	temp = sign_extend32(readval[1] << 8 | readval[0], 15);
+-	*val = div_s64((s64)temp * 488281, 1000);
++	*val = -div_s64((s64)temp * 488281, 1000);
+ 	return 0;
+ }

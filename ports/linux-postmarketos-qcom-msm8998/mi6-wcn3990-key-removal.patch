@@ -1,0 +1,43 @@
+Backport the WCN3990 pairwise-key removal quirk from David Heidelberg's RFC:
+https://lists.openwall.net/linux-kernel/2026/09/18/12
+Only enable the quirk for WCN3990 in this local backport.
+
+diff --git a/drivers/net/wireless/ath/ath10k/core.c b/drivers/net/wireless/ath/ath10k/core.c
+--- a/drivers/net/wireless/ath/ath10k/core.c
++++ b/drivers/net/wireless/ath/ath10k/core.c
+@@ -692,6 +692,7 @@
+ 		.tx_stats_over_pktlog = false,
+ 		.dynamic_sar_support = true,
+ 		.hw_restart_disconnect = true,
++		.no_pairwise_key_del_ind = true,
+ 	},
+ };
+ 
+diff --git a/drivers/net/wireless/ath/ath10k/hw.h b/drivers/net/wireless/ath/ath10k/hw.h
+--- a/drivers/net/wireless/ath/ath10k/hw.h
++++ b/drivers/net/wireless/ath/ath10k/hw.h
+@@ -634,6 +634,9 @@
+ 	bool dynamic_sar_support;
+ 
+ 	bool hw_restart_disconnect;
++
++	/* Firmware does not acknowledge pairwise key removal (WMI_CIPHER_NONE). */
++	bool no_pairwise_key_del_ind;
+ };
+ 
+ struct htt_resp;
+diff --git a/drivers/net/wireless/ath/ath10k/mac.c b/drivers/net/wireless/ath/ath10k/mac.c
+--- a/drivers/net/wireless/ath/ath10k/mac.c
++++ b/drivers/net/wireless/ath/ath10k/mac.c
+@@ -321,6 +321,11 @@
+ 	if (ret)
+ 		return ret;
+ 
++	/* Keep waiting for real installs and for other firmware families. */
++	if (cmd == DISABLE_KEY && !(flags & WMI_KEY_GROUP) &&
++	    ar->hw_params.no_pairwise_key_del_ind)
++		return 0;
++
+ 	time_left = wait_for_completion_timeout(&ar->install_key_done, 3 * HZ);
+ 	if (time_left == 0)
+ 		return -ETIMEDOUT;

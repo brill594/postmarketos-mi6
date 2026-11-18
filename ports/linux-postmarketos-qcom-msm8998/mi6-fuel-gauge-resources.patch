@@ -1,0 +1,16 @@
+diff --git a/arch/arm64/boot/dts/qcom/msm8998-xiaomi-sagit.dts b/arch/arm64/boot/dts/qcom/msm8998-xiaomi-sagit.dts
+--- a/arch/arm64/boot/dts/qcom/msm8998-xiaomi-sagit.dts
++++ b/arch/arm64/boot/dts/qcom/msm8998-xiaomi-sagit.dts
+@@ -348,6 +348,12 @@
+ &pmi8998_fg {
+ 	status = "okay";
+ 
++	/* This kernel's fuel gauge also reads charger status and its USB IRQ. */
++	reg = <0x4000>, <0x1000>;
++	interrupts = <0x2 0x40 0x3 IRQ_TYPE_EDGE_RISING>,
++		     <0x2 0x13 0x4 IRQ_TYPE_EDGE_BOTH>;
++	interrupt-names = "soc-delta", "usb-plugin";
++
+ 	qcom,max-voltage-uv = <4400000>;
+ 	qcom,min-voltage-uv = <3700000>;
+ 	qcom,battery-capacity-ua = <3350000>;

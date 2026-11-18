@@ -1,0 +1,12 @@
+/artifacts/
+/work/
+/src/
+/backups/
+/config/pmbootstrap.cfg
+/config/device-login.txt
+*.img
+*.apk
+*.log
+*.pem
+*.key
+.DS_Store
