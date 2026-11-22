@@ -1,0 +1,90 @@
+Backport the WCN3990 split A-MSDU handling proposed by David Heidelberg and Richard Acayan.
+https://lkml.rescloud.iu.edu/2610.2/11670.html
+
+--- a/drivers/net/wireless/ath/ath10k/htt.h
++++ b/drivers/net/wireless/ath/ath10k/htt.h
+@@ -1924,6 +1924,15 @@
+ 	bool bundle_tx;
+ 	struct sk_buff_head tx_req_head;
+ 	struct sk_buff_head tx_complete_head;
++
++	/* Incomplete in-order MPDU, protected by rx_ring.lock. */
++	struct {
++		struct sk_buff_head msdus;
++		u16 peer_id;
++		u8 vdev_id;
++		u8 tid;
++		bool frag;
++	} rx_in_ord_split;
+ };
+ 
+ struct ath10k_htt_tx_ops {
+--- a/drivers/net/wireless/ath/ath10k/htt_rx.c
++++ b/drivers/net/wireless/ath/ath10k/htt_rx.c
+@@ -291,6 +291,7 @@
+ 	skb_queue_purge(&htt->rx_msdus_q);
+ 	skb_queue_purge(&htt->rx_in_ord_compl_q);
+ 	skb_queue_purge(&htt->tx_fetch_ind_q);
++	skb_queue_purge(&htt->rx_in_ord_split.msdus);
+ 
+ 	spin_lock_bh(&htt->rx_ring.lock);
+ 	ath10k_htt_rx_ring_free(htt);
+@@ -835,6 +836,7 @@
+ 	skb_queue_head_init(&htt->rx_msdus_q);
+ 	skb_queue_head_init(&htt->rx_in_ord_compl_q);
+ 	skb_queue_head_init(&htt->tx_fetch_ind_q);
++	skb_queue_head_init(&htt->rx_in_ord_split.msdus);
+ 	atomic_set(&htt->num_mpdus_ready, 0);
+ 
+ 	ath10k_dbg(ar, ATH10K_DBG_BOOT, "htt rx ring size %d fill_level %d\n",
+@@ -3302,6 +3304,17 @@
+ 	 * extracted and processed.
+ 	 */
+ 	__skb_queue_head_init(&list);
++	if (!skb_queue_empty(&htt->rx_in_ord_split.msdus) &&
++	    (peer_id != htt->rx_in_ord_split.peer_id ||
++	     vdev_id != htt->rx_in_ord_split.vdev_id ||
++	     tid != htt->rx_in_ord_split.tid ||
++	     frag != htt->rx_in_ord_split.frag || offload)) {
++		ath10k_warn(ar, "split amsdu did not resume immediately\n");
++		__skb_queue_purge(&htt->rx_in_ord_split.msdus);
++		htt->rx_confused = true;
++		return -EIO;
++	}
++
+ 	if (ar->hw_params.target_64bit)
+ 		ret = ath10k_htt_rx_pop_paddr64_list(htt, &resp->rx_in_ord_ind,
+ 						     &list);
+@@ -3311,10 +3324,13 @@
+ 
+ 	if (ret < 0) {
+ 		ath10k_warn(ar, "failed to pop paddr list: %d\n", ret);
++		__skb_queue_purge(&htt->rx_in_ord_split.msdus);
+ 		htt->rx_confused = true;
+ 		return -EIO;
+ 	}
+ 
++	skb_queue_splice_init(&htt->rx_in_ord_split.msdus, &list);
++
+ 	/* Offloaded frames are very different and need to be handled
+ 	 * separately.
+ 	 */
+@@ -3339,6 +3355,18 @@
+ 			ath10k_htt_rx_h_enqueue(ar, &amsdu, status);
+ 			break;
+ 		case -EAGAIN:
++			/* WCN3990 can deliver one MPDU over two HTT indications. */
++			if (ar->hif.bus == ATH10K_BUS_SNOC &&
++			    skb_queue_len(&list) <= htt->rx_ring.size) {
++				ath10k_dbg(ar, ATH10K_DBG_HTT, "split amsdu pending %u",
++					   skb_queue_len(&list));
++				htt->rx_in_ord_split.peer_id = peer_id;
++				htt->rx_in_ord_split.vdev_id = vdev_id;
++				htt->rx_in_ord_split.tid = tid;
++				htt->rx_in_ord_split.frag = frag;
++				skb_queue_splice_init(&list, &htt->rx_in_ord_split.msdus);
++				return 0;
++			}
+ 			fallthrough;
+ 		default:
+ 			/* Should not happen. */
